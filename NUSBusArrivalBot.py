@@ -1,13 +1,14 @@
 import logging
-from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Bot, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 
 import requests
 import json
+from os import environ
 from geopy.distance import vincenty
 from bs4 import BeautifulSoup
 
-from credentials import TOKEN
+from credentials import TOKEN, APP_URL
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -17,6 +18,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 #for sorting the list of busses
 def sortName(bus):
     return bus["name"]
+
 
 #returns object containing array of bus stops data
 def getStopsList():
@@ -28,6 +30,7 @@ def getStopsList():
 
     return result["BusStopsResult"]
 
+
 #does the ajax call to the API
 def getArrivals(stopID):
     url = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname=' + stopID
@@ -37,6 +40,7 @@ def getArrivals(stopID):
     data = json.loads(soup.text)
 
     return data["ShuttleServiceResult"]
+
 
 #returns the text to be printed for the user
 def getArrivalsText(stopID):
@@ -61,6 +65,7 @@ def getArrivalsText(stopID):
     text = text.rstrip() #rstrip removes the additional \n characters from the back of the string
 
     return text
+
 
 #returns array of nearest stops objects
 #uses the global variable stopsList
@@ -91,6 +96,7 @@ def getNearestStops(queryPoint):
 
     return nearestStops
 
+
 #bot functions
 
 #sends a welcome message to the user
@@ -108,6 +114,7 @@ def start(bot, update):
     text = "Hello! This is a telegram bot for getting the arrival timings of NUS busses."
     bot.sendMessage(chat_id, text, reply_markup=reply_markup)
 
+
 #uses the global variable stopsList
 def getstops(bot, update):
     chat_id = update.message.chat_id
@@ -122,6 +129,7 @@ def getstops(bot, update):
     text = "Pick a stop:"
 
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
+
 
 #gives user a list of 5 nearest bus stops
 def location(bot, update):
@@ -145,6 +153,7 @@ def location(bot, update):
 
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
+
 #gives user the bus arrival timings based on the stop selected
 def button(bot, update):
     query = update.callback_query
@@ -152,13 +161,13 @@ def button(bot, update):
     message_id = query.message.message_id
 
     #Disable the keyboard while the information is being retrieved
-    text = "Retrieving bus arrival timings...\n"
-    text = text + "Please hold on :)"
+    text = "Loading...\n"
     bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
     text = getArrivalsText(query.data)
 
     bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
+
 
 def help(bot, update):
     chat_id = update.message.chat_id
@@ -167,21 +176,30 @@ def help(bot, update):
 
     bot.sendMessage(chat_id=chat_id, text=text, parse_mode="Markdown")
 
+
 def error(bot, update, error):
     logging.warning('Update "%s" caused error "%s"' % (update, error))
+
 
 def main():
     # load list of stops
     global stopsList #use global variable so it only needs to be initialised once
-    # stopsList = getStopsList()
-    #use local data for now
-    with open('stops.json', 'r') as json_data:
-        stopsList = json.load(json_data)
+    stopsList = getStopsList()
     stopsList = stopsList["busstops"]
 
     # Create the Updater and pass it your bot's token.
     updater = Updater(TOKEN)
 
+    # initialise bot
+    global bot
+    bot = Bot(token=TOKEN)
+
+    # setup webhook
+    PORT = int(environ.get('PORT', '5000'))
+    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
+    updater.bot.setWebhook(APP_URL + TOKEN)
+
+    # add handlers
     updater.dispatcher.add_handler(CommandHandler('start', start))
     updater.dispatcher.add_handler(CommandHandler('getstops', getstops))
     updater.dispatcher.add_handler(MessageHandler(Filters.location, location))
@@ -189,12 +207,10 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('help', help))
     updater.dispatcher.add_error_handler(error)
 
-    # Start the Bot
-    updater.start_polling()
-
     # Run the bot until the user presses Ctrl-C or the process receives SIGINT,
     # SIGTERM or SIGABRT
     updater.idle()
+
 
 if __name__ == "__main__":
     main()
