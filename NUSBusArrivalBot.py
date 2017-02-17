@@ -147,7 +147,12 @@ def location(bot, update):
     keyboard = []
     for stop in nearestStops:
         buttonText = stop["caption"]
-        keyboard.append([InlineKeyboardButton(buttonText, callback_data=stop["name"])])
+        data = {
+            "mode": "get_stop_timing",
+            "stopID": stop["name"]
+        }
+        payload = json.dumps(json)
+        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = "Here are the 5 closest bus stops:"
