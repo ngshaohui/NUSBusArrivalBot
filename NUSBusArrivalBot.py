@@ -124,7 +124,12 @@ def getstops(bot, update):
     keyboard = []
     for stop in stopsList:
         buttonText = stop["caption"]
-        keyboard.append([InlineKeyboardButton(buttonText, callback_data=stop["name"])])
+        data = {
+            "mode": "get_timing",
+            "stopID": stop["name"]
+        }
+        buttonText = stop["caption"]
+        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = "Pick a stop:"
@@ -148,7 +153,7 @@ def location(bot, update):
     for stop in nearestStops:
         buttonText = stop["caption"]
         data = {
-            "mode": "get_stop_timing",
+            "mode": "get_timing",
             "stopID": stop["name"]
         }
         payload = json.dumps(json)
@@ -165,6 +170,9 @@ def button(bot, update):
     query = update.callback_query
     chat_id = query.message.chat_id
     message_id = query.message.message_id
+
+    content = json.loads(query.data)
+    stopID = content["stopID"]
 
     #Disable the keyboard while the information is being retrieved
     text = "Loading...\n"
