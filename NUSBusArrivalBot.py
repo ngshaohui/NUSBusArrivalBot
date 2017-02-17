@@ -4,6 +4,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 
 import requests
 import json
+import pymongo
 from os import environ
 from geopy.distance import vincenty
 from bs4 import BeautifulSoup
@@ -186,6 +187,11 @@ def main():
     global stopsList #use global variable so it only needs to be initialised once
     stopsList = getStopsList()
     stopsList = stopsList["busstops"]
+
+    # initialise database
+    client = MongoClient(MLABS_DATABASE)
+    global db
+    db = client.nusbusarrivalbot # select the database
 
     # Create the Updater and pass it your bot's token.
     updater = Updater(TOKEN)
