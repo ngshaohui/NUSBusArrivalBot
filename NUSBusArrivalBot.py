@@ -37,6 +37,7 @@ def getStopsDict():
     stopsDict = {}
     for stop in stopsList:
         stopsDict[stop["name"]] = stop["caption"]
+        stopsDict[stop["caption"]] = stop["name"]
 
     return stopsDict
 
@@ -107,8 +108,19 @@ def getNearestStops(queryPoint):
     return nearestStops
 
 
-def getStopName(stopID):
-    return stopsDict[stopID]
+def getStopName(stop_id):
+    return stopsDict[stop_id]
+
+
+def getStopID(stop_name):
+    return stopsDict[stop_name]
+
+
+def formatMessage(message_text):
+    message_text.replace(" ", "")
+    message_text = message_text.lower()
+
+    return message_text
 
 #bot functions
 
@@ -120,7 +132,8 @@ def start(bot, update):
     #initialise custom keyboard
     keyboard = []
     sendLocationButton = KeyboardButton(text="Get nearest stops", request_location=True)
-    keyboard.append(["/customise", "/getstops", sendLocationButton])
+    keyboard.append(["/listallstops", sendLocationButton])
+    keyboard.append(["/customise"])
 
     reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, one_time_keyboard=True)
 
@@ -138,7 +151,7 @@ def start(bot, update):
 
 
 #uses the global variable stopsList
-def getstops(bot, update):
+def listallstops(bot, update):
     chat_id = update.message.chat_id
 
     #craft inline keyboard
@@ -197,11 +210,6 @@ def button(bot, update):
 
     if user_state == "get_timing":
         stop_id = content["stopID"]
-
-        #Disable the keyboard while the information is being retrieved
-        text = "Loading...\n"
-        bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
-
         text = getArrivalsText(stop_id)
 
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
@@ -249,9 +257,13 @@ def button(bot, update):
         for stop in custom_stops:
             keyboard.append([getStopName(stop)])
 
+        sendLocationButton = KeyboardButton(text="Get nearest stops", request_location=True)
+        keyboard.append(["/listallstops", sendLocationButton])
+        keyboard.append(["/customise"])
+
         reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, one_time_keyboard=True)
 
-        text = "Hello! This is a telegram bot for getting the arrival timings of NUS busses."
+        text = "Custom keyboard has been updated"
         bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
 
@@ -266,15 +278,17 @@ def showSettings(chat_id):
 
     data = {"user_state": "settings_add"}
     payload = json.dumps(data)
-    keyboard.append([InlineKeyboardButton("Add", callback_data=payload)])
+    add_button = InlineKeyboardButton("Add stop", callback_data=payload)
     payload = json.dumps({"user_state": "settings_remove"})
-    keyboard.append([InlineKeyboardButton("Remove", callback_data=payload)])
+    remove_button = InlineKeyboardButton("Remove stop", callback_data=payload)
     # payload = json.dumps({"user_state": "settings_reorder"})
     # keyboard.append([InlineKeyboardButton("Reorder", callback_data=payload)])
     data = {"user_state": "exit_settings"}
     payload = json.dumps(data)
-    keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
+    done_button = InlineKeyboardButton("Done", callback_data=payload)
 
+    keyboard.append([remove_button, add_button])
+    keyboard.append([done_button])
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = "Choose an action"
 
@@ -397,6 +411,15 @@ def reorderStops(chat_id):
     pass
 
 
+def processmessage(bot, update):
+    chat_id = update.message.chat_id
+    message_text = update.message.text
+    stop_id = getStopID(message_text)
+    text = getArrivalsText(stop_id)
+
+    bot.sendMessage(chat_id=chat_id, text=text)
+
+
 def help(bot, update):
     chat_id = update.message.chat_id
     text = "*The bus will come when it comes.*\n\n"
@@ -430,20 +453,21 @@ def main():
     bot = Bot(token=TOKEN)
 
     # setup webhook
-    # PORT = int(environ.get('PORT', '5000'))
-    # updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
-    # updater.bot.setWebhook(APP_URL + TOKEN)
+    PORT = int(environ.get('PORT', '5000'))
+    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
+    updater.bot.setWebhook(APP_URL + TOKEN)
 
     # Use long polling (disabled when webhooks are enabled)
-    updater.start_polling()
+    # updater.start_polling()
 
     # add handlers
     updater.dispatcher.add_handler(CommandHandler('start', start))
-    updater.dispatcher.add_handler(CommandHandler('getstops', getstops))
+    updater.dispatcher.add_handler(CommandHandler('listallstops', listallstops))
     updater.dispatcher.add_handler(MessageHandler(Filters.location, location))
     updater.dispatcher.add_handler(CallbackQueryHandler(button))
     updater.dispatcher.add_handler(CommandHandler('customise', settings))
     updater.dispatcher.add_handler(CommandHandler('help', help))
+    updater.dispatcher.add_handler(MessageHandler(Filters.text, processmessage))
     updater.dispatcher.add_error_handler(error)
 
     # Run the bot until the user presses Ctrl-C or the process receives SIGINT,
