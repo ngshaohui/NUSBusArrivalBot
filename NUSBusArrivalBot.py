@@ -4,12 +4,12 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 
 import requests
 import json
-import pymongo
+from pymongo import MongoClient
 from os import environ
 from geopy.distance import vincenty
 from bs4 import BeautifulSoup
 
-from credentials import TOKEN, APP_URL
+from credentials import TOKEN, APP_URL, MLABS_DATABASE
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -128,6 +128,7 @@ def getstops(bot, update):
             "mode": "get_timing",
             "stopID": stop["name"]
         }
+        payload = json.dumps(data)
         buttonText = stop["caption"]
         keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
 
@@ -178,7 +179,7 @@ def button(bot, update):
     text = "Loading...\n"
     bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
-    text = getArrivalsText(query.data)
+    text = getArrivalsText(stopID)
 
     bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
@@ -217,6 +218,9 @@ def main():
     PORT = int(environ.get('PORT', '5000'))
     updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
     updater.bot.setWebhook(APP_URL + TOKEN)
+
+    # # Use long polling (disabled when webhooks are enabled)
+    # updater.start_polling()
 
     # add handlers
     updater.dispatcher.add_handler(CommandHandler('start', start))
