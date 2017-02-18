@@ -210,6 +210,11 @@ def button(bot, update):
 
     if user_state == "get_timing":
         stop_id = content["stopID"]
+
+        #Disable the keyboard while the information is being retrieved
+        text = "Loading...\n"
+        bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
+
         text = getArrivalsText(stop_id)
 
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
@@ -290,9 +295,29 @@ def showSettings(chat_id):
     keyboard.append([remove_button, add_button])
     keyboard.append([done_button])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    text = "Choose an action"
 
-    bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
+    text = ""
+    custom_list_text = getCustomKeyboardText(chat_id)
+    if custom_list_text:
+        text += "Here are the stops in your list:\n"
+        text += custom_list_text
+    else:
+        text += "Your list is currently empty\n"
+        text += "Try adding some stops!\n"
+
+    text += "Choose an option:"
+
+    bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="Markdown")
+
+
+def getCustomKeyboardText(chat_id):
+    custom_stops = getUserStopsList(chat_id)
+    text = ""
+    for index, stop in enumerate(custom_stops):
+        stop_text = "*" + str(index + 1) + ". " + getStopName(stop) + "*\n"
+        text += stop_text
+
+    return text
 
 
 #returns an array of the user custom stops
@@ -318,28 +343,33 @@ def showAddStops(chat_id):
     #craft inline keyboard
     keyboard = []
 
-    for stop in stopsList:
-        if stop["name"] not in custom_stops:
-            buttonText = stop["caption"]
-            data = {
-                "user_state": "add_new_stop",
-                "stopID": stop["name"]
+    if len(custom_stops) != len(stopsList):
+        for stop in stopsList:
+            if stop["name"] not in custom_stops:
+                buttonText = stop["caption"]
+                data = {
+                    "user_state": "add_new_stop",
+                    "stopID": stop["name"]
+                }
+                payload = json.dumps(data)
+                keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+
+        #add a done button
+        #brings the user back to settings
+        data = {
+                "user_state": "add_new_stop_done"
             }
-            payload = json.dumps(data)
-            keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+        payload = json.dumps(data)
+        keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
 
-    #add a done button
-    #brings the user back to settings
-    data = {
-            "user_state": "add_new_stop_done"
-        }
-    payload = json.dumps(data)
-    keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        text = "Pick a stop to *add*:"
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    text = "Pick a stop:"
-
-    bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
+        bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="Markdown")
+    else:
+        text = "No more stops to add"
+        bot.sendMessage(chat_id=chat_id, text=text, parse_mode="Markdown")
+        showSettings(chat_id)
 
 
 #current user state must be "settings_add_new_stop"
@@ -363,32 +393,36 @@ def addStop(chat_id, stop_id):
 def showRemoveStops(chat_id):
     #get user's current custom list of stops
     custom_stops = getUserStopsList(chat_id)
-    print(custom_stops)
 
     #craft the keyboard
     keyboard = []
 
-    for stop in custom_stops:
-        buttonText = getStopName(stop)
+    if custom_stops:
+        for stop in custom_stops:
+            buttonText = getStopName(stop)
+            data = {
+                "user_state": "remove_stop",
+                "stopID": stop
+            }
+            payload = json.dumps(data)
+            keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+
+        #add a done button
+        #brings the user back to settings
         data = {
-            "user_state": "remove_stop",
-            "stopID": stop
-        }
+                "user_state": "remove_stop_done"
+            }
         payload = json.dumps(data)
-        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+        keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
 
-    #add a done button
-    #brings the user back to settings
-    data = {
-            "user_state": "remove_stop_done"
-        }
-    payload = json.dumps(data)
-    keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        text = "Pick a stop to *remove*:"
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    text = "Pick a stop to remove:"
-
-    bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
+        bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="Markdown")
+    else:
+        text = "No more stops to remove"
+        bot.sendMessage(chat_id=chat_id, text=text, parse_mode="Markdown")
+        showSettings(chat_id)
 
 
 def removeStop(chat_id, stop_id):
@@ -453,12 +487,12 @@ def main():
     bot = Bot(token=TOKEN)
 
     # setup webhook
-    PORT = int(environ.get('PORT', '5000'))
-    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
-    updater.bot.setWebhook(APP_URL + TOKEN)
+    # PORT = int(environ.get('PORT', '5000'))
+    # updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
+    # updater.bot.setWebhook(APP_URL + TOKEN)
 
     # Use long polling (disabled when webhooks are enabled)
-    # updater.start_polling()
+    updater.start_polling()
 
     # add handlers
     updater.dispatcher.add_handler(CommandHandler('start', start))
