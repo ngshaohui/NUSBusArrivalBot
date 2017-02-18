@@ -135,7 +135,7 @@ def start(bot, update):
     keyboard.append(["/listallstops", sendLocationButton])
     keyboard.append(["/customise"])
 
-    reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, one_time_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
     text = "Hello! This is a telegram bot for getting the arrival timings of NUS busses."
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
@@ -194,7 +194,7 @@ def location(bot, update):
         keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    text = "Here are the 5 closest bus stops:"
+    text = "Here are the closest bus stops:"
 
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
@@ -231,11 +231,6 @@ def button(bot, update):
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
         addStop(chat_id, stop_id)
 
-    if user_state == "add_new_stop_done":
-        text = "Done"
-        bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
-        showSettings(chat_id)
-
     if user_state == "settings_remove":
         text = "Remove stops"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
@@ -247,7 +242,18 @@ def button(bot, update):
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
         removeStop(chat_id, stop_id)
 
-    if user_state == "remove_stop_done":
+    if user_state == "settings_reorder":
+        text = "Reorder stops"
+        bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
+        showReorderStopsList(chat_id)
+
+    if user_state == "reorder_stop":
+        stop_id = content["stopID"]
+        text = getStopName(stop_id) + " shifted to the top"
+        bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
+        reorderStop(chat_id, stop_id)
+
+    if user_state == "edit_done":
         text = "Done"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
         showSettings(chat_id)
@@ -266,7 +272,7 @@ def button(bot, update):
         keyboard.append(["/listallstops", sendLocationButton])
         keyboard.append(["/customise"])
 
-        reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, one_time_keyboard=True)
+        reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
         text = "Custom keyboard has been updated"
         bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
@@ -283,29 +289,32 @@ def showSettings(chat_id):
 
     data = {"user_state": "settings_add"}
     payload = json.dumps(data)
-    add_button = InlineKeyboardButton("Add stop", callback_data=payload)
+    add_button = InlineKeyboardButton("Add stops", callback_data=payload)
     payload = json.dumps({"user_state": "settings_remove"})
-    remove_button = InlineKeyboardButton("Remove stop", callback_data=payload)
-    # payload = json.dumps({"user_state": "settings_reorder"})
-    # keyboard.append([InlineKeyboardButton("Reorder", callback_data=payload)])
+    remove_button = InlineKeyboardButton("Remove stops", callback_data=payload)
+    payload = json.dumps({"user_state": "settings_reorder"})
+    reorder_button = InlineKeyboardButton("Reorder stops", callback_data=payload)
     data = {"user_state": "exit_settings"}
     payload = json.dumps(data)
     done_button = InlineKeyboardButton("Done", callback_data=payload)
-
-    keyboard.append([remove_button, add_button])
-    keyboard.append([done_button])
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     text = ""
     custom_list_text = getCustomKeyboardText(chat_id)
     if custom_list_text:
         text += "Here are the stops in your list:\n"
         text += custom_list_text
+
+        keyboard.append([add_button, remove_button])
+        keyboard.append([reorder_button, done_button])
     else:
         text += "Your list is currently empty\n"
         text += "Try adding some stops!\n"
 
+        keyboard.append([add_button])
+        keyboard.append([done_button])
+
     text += "Choose an option:"
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="Markdown")
 
@@ -357,7 +366,7 @@ def showAddStops(chat_id):
         #add a done button
         #brings the user back to settings
         data = {
-                "user_state": "add_new_stop_done"
+                "user_state": "edit_done"
             }
         payload = json.dumps(data)
         keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
@@ -410,7 +419,7 @@ def showRemoveStops(chat_id):
         #add a done button
         #brings the user back to settings
         data = {
-                "user_state": "remove_stop_done"
+                "user_state": "edit_done"
             }
         payload = json.dumps(data)
         keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
@@ -441,8 +450,51 @@ def removeStop(chat_id, stop_id):
     showRemoveStops(chat_id)
 
 
-def reorderStops(chat_id):
-    pass
+def showReorderStopsList(chat_id):
+    custom_stops = getUserStopsList(chat_id)
+
+    #craft the keyboard
+    keyboard = []
+
+    for stop in custom_stops:
+        buttonText = getStopName(stop)
+        data = {
+            "user_state": "reorder_stop",
+            "stopID": stop
+        }
+        payload = json.dumps(data)
+        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+
+    #add a done button
+    #brings the user back to settings
+    data = {
+            "user_state": "edit_done"
+        }
+    payload = json.dumps(data)
+    keyboard.append([InlineKeyboardButton("Done", callback_data=payload)])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    text = "Pick a stop to *shift it to the top*:"
+
+    bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="Markdown")
+
+
+def reorderStop(chat_id, stop_id):
+    custom_stops = getUserStopsList(chat_id)
+
+    #shift stop to the front
+    custom_stops.insert(0, custom_stops.pop(custom_stops.index(stop_id)))
+
+    payload = {
+        "custom_stops": custom_stops
+    }
+
+    #update user_state and custom_stops in database
+    db.user_settings.update_one(filter={'chat_id' : chat_id},
+                                update={'$set': payload},
+                                upsert=True)
+
+    showReorderStopsList(chat_id)
 
 
 def processmessage(bot, update):
@@ -487,12 +539,12 @@ def main():
     bot = Bot(token=TOKEN)
 
     # setup webhook
-    # PORT = int(environ.get('PORT', '5000'))
-    # updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
-    # updater.bot.setWebhook(APP_URL + TOKEN)
+    PORT = int(environ.get('PORT', '5000'))
+    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
+    updater.bot.setWebhook(APP_URL + TOKEN)
 
     # Use long polling (disabled when webhooks are enabled)
-    updater.start_polling()
+    # updater.start_polling()
 
     # add handlers
     updater.dispatcher.add_handler(CommandHandler('start', start))
