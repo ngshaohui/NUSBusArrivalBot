@@ -4,6 +4,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 
 import requests
 import json
+import datetime
 from pymongo import MongoClient
 from os import environ
 from geopy.distance import vincenty
@@ -122,6 +123,18 @@ def formatMessage(message_text):
 
     return message_text
 
+def getCustomKeyboard(chat_id):
+    keyboard = []
+    custom_stops = getUserStopsList(chat_id)
+    for stop in custom_stops:
+        keyboard.append([getStopName(stop)])
+
+    sendLocationButton = KeyboardButton(text="Get nearest stops", request_location=True)
+    keyboard.append(["/listallstops", sendLocationButton])
+    keyboard.append(["/customise"])
+
+    return keyboard
+
 #bot functions
 
 #sends a welcome message to the user
@@ -129,25 +142,23 @@ def formatMessage(message_text):
 def start(bot, update):
     chat_id = update.message.chat_id
 
-    #initialise custom keyboard
-    keyboard = []
-    sendLocationButton = KeyboardButton(text="Get nearest stops", request_location=True)
-    keyboard.append(["/listallstops", sendLocationButton])
-    keyboard.append(["/customise"])
+    #check if user is already in the database
+    existing_data = db.user_settings.find_one({"chat_id": chat_id})
 
+    if not existing_data:
+        #add user to database
+        payload = {
+            "chat_id": chat_id,
+            "date_initialised": datetime.datetime.utcnow()
+        }
+
+        db.user_settings.insert_one(document=payload)
+
+    keyboard = getCustomKeyboard(chat_id)
     reply_markup = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
     text = "Hello! This is a telegram bot for getting the arrival timings of NUS busses."
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
-
-    #add user to database
-    payload = {
-        "chat_id": chat_id
-    }
-
-    db.user_settings.update_one(filter={'chat_id' : chat_id}, 
-                                update={'$set': payload}, 
-                                upsert=True)
 
 
 #uses the global variable stopsList
@@ -333,7 +344,6 @@ def getCustomKeyboardText(chat_id):
 def getUserStopsList(chat_id):
     #retrieve user's current custom list from db
     existing_data = db.user_settings.find_one({"chat_id": chat_id})
-    print(existing_data)
 
     if "custom_stops" in existing_data:
         #load into array
