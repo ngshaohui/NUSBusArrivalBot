@@ -2,9 +2,9 @@ import logging
 from telegram import Bot, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 
-import requests
-import json
 import datetime
+import json
+import requests
 from pymongo import MongoClient
 from os import environ
 from geopy.distance import vincenty
@@ -16,6 +16,29 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
                     level=logging.INFO)
 
 #non-bot stuff
+
+# TODO should have 2 classes, one for the bus stop and one for the bus itself
+
+# TODO should be converting it to a proper class instead of handling raw json
+class BusStopResult:
+  def __init__(self, name, caption):
+    self.time_created = datetime.datetime.now()
+    self.name = name
+    self.caption = caption
+    self.shuttleServices = []
+
+  def addShuttleService(self, service):
+    self.shuttleServices.append(service)
+    # TODO sort list by name
+
+
+# this should contain one or more ShuttleServiceResult
+class ShuttleServiceResult:
+  def __init__(self, name, arrivalTime, nextArrivalTime):
+    self.name = name
+    self.arrivalTime = arrivalTime
+    self.nextArrivalTime = nextArrivalTime
+
 
 #for sorting the list of busses
 def sortName(bus):
