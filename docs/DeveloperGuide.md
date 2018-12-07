@@ -20,7 +20,7 @@ Use a virtual environment to set up an isolated working space. This ensures that
 > `.\dev\Scripts\activate`
 
 3. Enter the virtualenv (**Unix**)
-> `./dev/lib/activate`
+> `source ./dev/bin/activate`
 
 4. Install the required packages
 > `pip3 install -r requirements.txt`
