@@ -10,7 +10,7 @@ from os import environ
 from geopy.distance import vincenty
 from bs4 import BeautifulSoup
 
-from credentials import TOKEN, APP_URL, MLABS_DATABASE
+from credentials import TOKEN, APP_URL, DATABASE_URL
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -560,7 +560,7 @@ def main():
     stopsDict = getStopsDict()
 
     # initialise database
-    client = MongoClient(MLABS_DATABASE)
+    client = MongoClient(DATABASE_URL)
     global db
     db = client.nusbusarrivalbot # select the database
 
