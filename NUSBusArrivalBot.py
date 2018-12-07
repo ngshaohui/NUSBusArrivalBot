@@ -17,27 +17,91 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 #non-bot stuff
 
+# Constants
+BUS_STOP_LIST_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetBusStops'
+BUS_STOP_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname='
+
 # TODO should have 2 classes, one for the bus stop and one for the bus itself
 
 # TODO should be converting it to a proper class instead of handling raw json
 class BusStopResult:
-  def __init__(self, name, caption):
-    self.time_created = datetime.datetime.now()
-    self.name = name
-    self.caption = caption
-    self.shuttleServices = []
+  def __init__(self, stop_id):
+    url = BUS_STOP_URL + stop_id
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    data = json.loads(soup.text)
+    stop_info = data["ShuttleServiceResult"]
 
-  def addShuttleService(self, service):
-    self.shuttleServices.append(service)
-    # TODO sort list by name
+    self.time_created = datetime.datetime.now() # datetime
+    self.name = stop_info["name"] # str
+    self.caption = stop_info["caption"] # str
+    self.expiry_time = self.time_created + datetime.timedelta(seconds=30) # datetime
+    self.shuttle_services = [] # [ShuttleServiceResult]
+    shuttles = data["ShuttleServiceResult"]["shuttles"]
+    for shuttle in shuttles:
+      service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
+      self.shuttle_services.append(service)
+
+
+  def update(self):
+    self.clearShuttleServiceList()
+
+    url = BUS_STOP_URL + self.name
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    data = json.loads(soup.text)
+
+    shuttles = data["ShuttleServiceResult"]["shuttles"]
+
+    for shuttle in shuttles:
+      service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
+      self.shuttle_services.append(service)
+
+    # TODO sort resulting list
+
+
+  def clearShuttleServiceList(self):
+    del self.shuttle_services[:]
+
+
+  def hasExpired(self):
+    return datetime.datetime.now() > self.expiry_time
+
+
+  # TODO better method name?
+  def dataAsString(self):
+    text = "Bus arrival timings for " + self.caption + "\n\n" #text to be displayed to user
+
+    for service in self.shuttle_services:
+      bus_id = service.name
+      arrival_time = service.arrival_time
+      next_arrival_time = service.next_arrival_time
+
+      text = text + bus_id + "\n" #append bus id
+      text = text + "Next: " + arrival_time + "\n" #append next arrival time
+      if arrival_time != "-": #show subsequent only if there is a there is a bus arriving next
+        text = text + "Subsequent: " + next_arrival_time + "\n" #append subsequent arrival time
+      text = text + "\n"
+
+    text = text.rstrip() #rstrip removes the additional \n characters from the back of the string
+
+    return text
+
+
+  # TODO better method name
+  def getData(self):
+    if self.hasExpired():
+      self.update()
+
+    return self.dataAsString()
 
 
 # this should contain one or more ShuttleServiceResult
 class ShuttleServiceResult:
-  def __init__(self, name, arrivalTime, nextArrivalTime):
-    self.name = name
-    self.arrivalTime = arrivalTime
-    self.nextArrivalTime = nextArrivalTime
+  def __init__(self, name, arrival_time, next_arrival_time):
+    self.name = name # str
+    self.arrival_time = arrival_time # str
+    self.next_arrival_time = next_arrival_time # str
 
 
 #for sorting the list of busses
