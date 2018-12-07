@@ -28,19 +28,24 @@ class BusStopResult:
   def __init__(self, stop_id):
     url = BUS_STOP_URL + stop_id
     response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    data = json.loads(soup.text)
-    stop_info = data["ShuttleServiceResult"]
-
     self.time_created = datetime.datetime.now() # datetime
-    self.name = stop_info["name"] # str
-    self.caption = stop_info["caption"] # str
     self.expiry_time = self.time_created + datetime.timedelta(seconds=30) # datetime
-    self.shuttle_services = [] # [ShuttleServiceResult]
-    shuttles = data["ShuttleServiceResult"]["shuttles"]
-    for shuttle in shuttles:
-      service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
-      self.shuttle_services.append(service)
+
+    if response.status_code == requests.codes.ok: # 200 OK
+      self.valid = True
+      soup = BeautifulSoup(response.content, 'html.parser')
+      data = json.loads(soup.text)
+      stop_info = data["ShuttleServiceResult"]
+
+      self.name = stop_info["name"] # str
+      self.caption = stop_info["caption"] # str
+      self.shuttle_services = [] # [ShuttleServiceResult]
+      shuttles = data["ShuttleServiceResult"]["shuttles"]
+      for shuttle in shuttles:
+        service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
+        self.shuttle_services.append(service)
+    else: # unsuccessful API call
+      self.valid = False      
 
 
   def update(self):
@@ -48,16 +53,23 @@ class BusStopResult:
 
     url = BUS_STOP_URL + self.name
     response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    data = json.loads(soup.text)
+    self.time_created = datetime.datetime.now() # datetime
+    self.expiry_time = self.time_created + datetime.timedelta(seconds=30) # datetime
 
-    shuttles = data["ShuttleServiceResult"]["shuttles"]
+    if response.status_code == requests.codes.ok: # 200 OK
+      self.valid = True
+      soup = BeautifulSoup(response.content, 'html.parser')
+      data = json.loads(soup.text)
 
-    for shuttle in shuttles:
-      service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
-      self.shuttle_services.append(service)
+      shuttles = data["ShuttleServiceResult"]["shuttles"]
 
-    # TODO sort resulting list
+      for shuttle in shuttles:
+        service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
+        self.shuttle_services.append(service)
+
+      # TODO sort resulting list
+    else:
+      self.valid = False
 
 
   def clearShuttleServiceList(self):
@@ -70,20 +82,25 @@ class BusStopResult:
 
   # TODO better method name?
   def dataAsString(self):
-    text = "Bus arrival timings for " + self.caption + "\n\n" #text to be displayed to user
+    text = ""
+    if self.valid:
+      text = text + "Bus arrival timings for " + self.caption + "\n\n" #text to be displayed to user
 
-    for service in self.shuttle_services:
-      bus_id = service.name
-      arrival_time = service.arrival_time
-      next_arrival_time = service.next_arrival_time
+      for service in self.shuttle_services:
+        bus_id = service.name
+        arrival_time = service.arrival_time
+        next_arrival_time = service.next_arrival_time
 
-      text = text + bus_id + "\n" #append bus id
-      text = text + "Next: " + arrival_time + "\n" #append next arrival time
-      if arrival_time != "-": #show subsequent only if there is a there is a bus arriving next
-        text = text + "Subsequent: " + next_arrival_time + "\n" #append subsequent arrival time
-      text = text + "\n"
+        text = text + bus_id + "\n" #append bus id
+        text = text + "Next: " + arrival_time + "\n" #append next arrival time
+        if arrival_time != "-": #show subsequent only if there is a there is a bus arriving next
+          text = text + "Subsequent: " + next_arrival_time + "\n" #append subsequent arrival time
+        text = text + "\n"
 
-    text = text.rstrip() #rstrip removes the additional \n characters from the back of the string
+      text = text.rstrip() #rstrip removes the additional \n characters from the back of the string
+
+    else:
+      text = text + "Sorry, the bus timing service seems to be unavailable." + "\n"
 
     return text
 
@@ -93,7 +110,9 @@ class BusStopResult:
     if self.hasExpired():
       self.update()
 
-    return self.dataAsString()
+    text = self.dataAsString()
+
+    return text
 
 
 # this should contain one or more ShuttleServiceResult
