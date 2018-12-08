@@ -10,6 +10,7 @@ from os import environ
 from geopy.distance import vincenty
 from bs4 import BeautifulSoup
 
+from bus_stop import BusStopResult
 from credentials import TOKEN, APP_URL, DATABASE_URL
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -17,11 +18,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 #non-bot stuff
 
-#for sorting the list of busses
-def sortName(bus):
-    return bus["name"]
 
-
+# TODO refactor as utils.py
 #returns object containing array of bus stops data
 def getStopsList():
     url = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetBusStops'
@@ -33,6 +31,7 @@ def getStopsList():
     return result["BusStopsResult"]
 
 
+# TODO refactor as utils.py
 #gets a dictionary that maps the stopID to its name
 def getStopsDict():
     stopsDict = {}
@@ -43,42 +42,7 @@ def getStopsDict():
     return stopsDict
 
 
-#does the ajax call to the API
-def getArrivals(stopID):
-    url = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname=' + stopID
-    result = requests.get(url)
-
-    soup = BeautifulSoup(result.content, 'html.parser')
-    data = json.loads(soup.text)
-
-    return data["ShuttleServiceResult"]
-
-
-#returns the text to be printed for the user
-def getArrivalsText(stopID):
-    result = getArrivals(stopID)
-    arrivals = result["shuttles"]
-    text = "Bus arrival timings for " + result["caption"] + "\n\n" #text to be displayed to user
-
-    #sort busses according to alphabetical order
-    arrivals = sorted(arrivals, key=sortName)
-
-    for bus in arrivals:
-        busID = bus["name"]
-        arrivalTime = bus["arrivalTime"]
-        nextArrivalTime = bus["nextArrivalTime"]
-
-        text = text + busID + "\n" #append busID
-        text = text + "Next: " + arrivalTime + "\n" #append next arrival time
-        if arrivalTime != "-": #show subsequent only if there is a there is a bus arriving next
-            text = text + "Subsequent: " + nextArrivalTime + "\n" #append subsequent arrival time
-        text = text + "\n"
-
-    text = text.rstrip() #rstrip removes the additional \n characters from the back of the string
-
-    return text
-
-
+# TODO refactor as utils.py
 #returns array of nearest stops objects
 #uses the global variable stopsList
 def getNearestStops(queryPoint):
@@ -109,19 +73,15 @@ def getNearestStops(queryPoint):
     return nearestStops
 
 
+# TODO refactor as utils.py
 def getStopName(stop_id):
     return stopsDict[stop_id]
 
 
+# TODO refactor as utils.py
 def getStopID(stop_name):
     return stopsDict[stop_name]
 
-
-def formatMessage(message_text):
-    message_text.replace(" ", "")
-    message_text = message_text.lower()
-
-    return message_text
 
 def getCustomKeyboard(chat_id):
     keyboard = []
@@ -226,7 +186,8 @@ def button(bot, update):
         text = "Loading...\n"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
-        text = getArrivalsText(stop_id)
+        stop_result = BusStopResult(stop_id)
+        text = stop_result.getData()
 
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
@@ -511,7 +472,9 @@ def processmessage(bot, update):
     chat_id = update.message.chat_id
     message_text = update.message.text
     stop_id = getStopID(message_text)
-    text = getArrivalsText(stop_id)
+
+    stop_result = BusStopResult(stop_id)
+    text = stop_result.getData()
 
     bot.sendMessage(chat_id=chat_id, text=text)
 
@@ -549,12 +512,12 @@ def main():
     bot = Bot(token=TOKEN)
 
     # setup webhook
-    PORT = int(environ.get('PORT', '5000'))
-    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
-    updater.bot.setWebhook(APP_URL + TOKEN)
+    # PORT = int(environ.get('PORT', '5000'))
+    # updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN)
+    # updater.bot.setWebhook(APP_URL + TOKEN)
 
     # Use long polling (disabled when webhooks are enabled)
-    # updater.start_polling()
+    updater.start_polling()
 
     # add handlers
     updater.dispatcher.add_handler(CommandHandler('start', start))

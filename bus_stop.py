@@ -26,9 +26,13 @@ class BusStopResult:
       self.caption = stop_info["caption"] # str
       self.shuttle_services = [] # [ShuttleServiceResult]
       shuttles = data["ShuttleServiceResult"]["shuttles"]
+
       for shuttle in shuttles:
         service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
         self.shuttle_services.append(service)
+
+      # sort list by name
+      self.shuttle_services.sort(key=lambda x: x.name)
     else: # unsuccessful API call
       self.valid = False      
 
@@ -52,7 +56,8 @@ class BusStopResult:
         service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
         self.shuttle_services.append(service)
 
-      # TODO sort resulting list
+      # sort list by name
+      self.shuttle_services.sort(key=lambda x: x.name)
     else:
       self.valid = False
 
