@@ -1,1 +1,1 @@
-web: python NUSBusArrivalBot.py
+web: python bot.py
