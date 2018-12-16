@@ -6,35 +6,18 @@ import requests
 from shuttle_service import ShuttleServiceResult
 
 # Constants
-BUS_STOP_LIST_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetBusStops'
 BUS_STOP_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname='
+TIMEOUT = 30
 
 class BusStopResult:
   def __init__(self, stop_id):
-    url = BUS_STOP_URL + stop_id
-    response = requests.get(url)
-    self.time_created = datetime.datetime.now() # datetime
-    self.expiry_time = self.time_created + datetime.timedelta(seconds=30) # datetime
 
-    if response.status_code == requests.codes.ok: # 200 OK
-      self.valid = True
-      soup = BeautifulSoup(response.content, 'html.parser')
-      data = json.loads(soup.text)
-      stop_info = data["ShuttleServiceResult"]
-
-      self.name = stop_info["name"] # str
-      self.caption = stop_info["caption"] # str
-      self.shuttle_services = [] # [ShuttleServiceResult]
-      shuttles = data["ShuttleServiceResult"]["shuttles"]
-
-      for shuttle in shuttles:
-        service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
-        self.shuttle_services.append(service)
-
-      # sort list by name
-      self.shuttle_services.sort(key=lambda x: x.name)
-    else: # unsuccessful API call
-      self.valid = False      
+    self.time_created = datetime.date.min # datetime
+    self.expiry_time = datetime.date.min # datetime
+    self.name = "error" # str
+    self.caption = "error" # str
+    self.shuttle_services = [] # [ShuttleServiceResult]
+    self.valid = False # bool
 
 
   def update(self):
@@ -43,7 +26,7 @@ class BusStopResult:
     url = BUS_STOP_URL + self.name
     response = requests.get(url)
     self.time_created = datetime.datetime.now() # datetime
-    self.expiry_time = self.time_created + datetime.timedelta(seconds=30) # datetime
+    self.expiry_time = self.time_created + datetime.timedelta(seconds=TIMEOUT) # datetime
 
     if response.status_code == requests.codes.ok: # 200 OK
       self.valid = True
