@@ -4,11 +4,8 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 
 import datetime
 import json
-import requests
 from pymongo import MongoClient
 from os import environ
-from geopy.distance import vincenty
-from bs4 import BeautifulSoup
 
 from bus_stop_list import BusStopList
 from utils import getNNearestStops
