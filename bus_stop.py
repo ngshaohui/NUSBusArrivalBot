@@ -4,9 +4,9 @@ import json
 import requests
 
 from shuttle_service import ShuttleService
+from utils import BUS_STOP_URL
 
 # Constants
-BUS_STOP_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname='
 TIMEOUT = 30
 
 class BusStop:

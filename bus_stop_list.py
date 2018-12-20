@@ -4,9 +4,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from bus_stop import BusStop
+from utils import BUS_STOP_LIST_URL
 
 # Constants
-BUS_STOP_LIST_URL = "http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetBusStops"
 TIMEOUT = 43200 # 12 hours in seconds
 
 class BusStopList:

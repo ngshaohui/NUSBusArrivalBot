@@ -1,7 +1,11 @@
 from geopy.distance import vincenty
 
-# TODO refactor this (why is it removing the furthest stop?)
-# returns array of nearest stops objects
+# constants
+BUS_STOP_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname='
+BUS_STOP_LIST_URL = "http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetBusStops"
+SERVICE_PICK_UP_POINT = "http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetPickupPoint?route_code="
+
+# return [BusStop]
 # default of 5 nearest stops
 def getNNearestStops(query_point, bus_stops, n=5):
     nearest_stops = [] # insert closest at the front, furthest at the back
