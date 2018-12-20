@@ -10,7 +10,8 @@ from os import environ
 from geopy.distance import vincenty
 from bs4 import BeautifulSoup
 
-from bus_stop import BusStopResult
+from bus_stop_list import BusStopList
+from utils import getNNearestStops
 from credentials import TOKEN, APP_URL, DATABASE_URL
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -18,76 +19,13 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 #non-bot stuff
 
-
-# TODO refactor as utils.py
-#returns object containing array of bus stops data
-def getStopsList():
-    url = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetBusStops'
-    result = requests.get(url)
-
-    soup = BeautifulSoup(result.content, 'html.parser')
-    result = json.loads(soup.text)
-
-    return result["BusStopsResult"]
-
-
-# TODO refactor as utils.py
-#gets a dictionary that maps the stopID to its name
-def getStopsDict():
-    stopsDict = {}
-    for stop in stopsList:
-        stopsDict[stop["name"]] = stop["caption"]
-        stopsDict[stop["caption"]] = stop["name"]
-
-    return stopsDict
-
-
-# TODO refactor as utils.py
-#returns array of nearest stops objects
-#uses the global variable stopsList
-def getNearestStops(queryPoint):
-    nearestStops = [] #insert closest at the front, furthest at the back
-    nearestDistances = []
-
-    for stop in stopsList:
-        stopLocation = (stop["latitude"], stop["longitude"])
-        currentDistance = vincenty(queryPoint, stopLocation).meters
-
-        if len(nearestStops) == 0: #initialise reference values
-            nearestDistances.append(currentDistance)
-            nearestStops.append(stop)
-        else: #insert to array maintaining ascending order
-            index = 0
-            for distance in nearestDistances:
-                if (currentDistance < distance):
-                    nearestDistances.insert(index, currentDistance)
-                    nearestStops.insert(index, stop)
-                    break
-                index = index + 1
-
-            if len(nearestStops) == 6:
-                #remove the furthest
-                del nearestStops[5]
-                del nearestDistances[5]
-
-    return nearestStops
-
-
-# TODO refactor as utils.py
-def getStopName(stop_id):
-    return stopsDict[stop_id]
-
-
-# TODO refactor as utils.py
-def getStopID(stop_name):
-    return stopsDict[stop_name]
-
-
+# uses global variable bus_stops
 def getCustomKeyboard(chat_id):
     keyboard = []
+    # custom_stops is a list of bus stop names
     custom_stops = getUserStopsList(chat_id)
-    for stop in custom_stops:
-        keyboard.append([getStopName(stop)])
+    for stop_name in custom_stops:
+        keyboard.append([bus_stops.getStopCaption(stop_name)])
 
     sendLocationButton = KeyboardButton(text="Get nearest stops", request_location=True)
     keyboard.append(["/listallstops", sendLocationButton])
@@ -121,20 +59,24 @@ def start(bot, update):
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup)
 
 
-#uses the global variable stopsList
+# TODO camel case method name
+# uses the global variable bus_stops
 def listallstops(bot, update):
     chat_id = update.message.chat_id
 
     #craft inline keyboard
     keyboard = []
-    for stop in stopsList:
-        buttonText = stop["caption"]
+    # temporary variable name
+    # TODO sort out naming conflict and remove temp var name
+    ls = bus_stops.getBusStopList()
+    for bus_stop in ls:
+        button_text = bus_stop.getCaption()
         data = {
             "user_state": "get_timing",
-            "stopID": stop["name"]
+            "stop_name": bus_stop.getName()
         }
         payload = json.dumps(data)
-        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=payload)])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = "Pick a stop:"
@@ -151,18 +93,19 @@ def location(bot, update):
     query_point = (latitude, longitude)
 
     #get nearest stops
-    nearestStops = getNearestStops(query_point)
+    nearest_stops = getNNearestStops(query_point, bus_stops)
 
     #craft the inlinekeyboard buttons
     keyboard = []
-    for stop in nearestStops:
-        buttonText = stop["caption"]
+    for bus_stop in nearest_stops:
+        stop_caption = bus_stop.getCaption()
+        button_text = stop_caption
         data = {
             "user_state": "get_timing",
-            "stopID": stop["name"]
+            "stop_name": bus_stop.getName()
         }
         payload = json.dumps(data)
-        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=payload)])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = "Here are the closest bus stops:"
@@ -177,17 +120,17 @@ def button(bot, update):
     message_id = query.message.message_id
 
     content = json.loads(query.data)
+    # TODO user state handler class
     user_state = content["user_state"]
 
     if user_state == "get_timing":
-        stop_id = content["stopID"]
+        stop_name = content["stop_name"]
 
         #Disable the keyboard while the information is being retrieved
         text = "Loading...\n"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
-        stop_result = BusStopResult(stop_id)
-        text = stop_result.getData()
+        text = bus_stops.getBusStopData(stop_name)
 
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
 
@@ -198,10 +141,11 @@ def button(bot, update):
         showAddStops(chat_id)
 
     if user_state == "add_new_stop":
-        stop_id = content["stopID"]
-        text = getStopName(stop_id) + " was added"
+        stop_name = content["stop_name"]
+        stop_caption = bus_stops.getStopCaption(stop_name)
+        text = stop_caption + " was added"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
-        addStop(chat_id, stop_id)
+        addStop(chat_id, stop_name)
 
     if user_state == "settings_remove":
         text = "Remove stops"
@@ -209,10 +153,11 @@ def button(bot, update):
         showRemoveStops(chat_id)
 
     if user_state == "remove_stop":
-        stop_id = content["stopID"]
-        text = getStopName(stop_id) + " was removed"
+        stop_name = content["stop_name"]
+        stop_caption = bus_stops.getStopCaption(stop_name)
+        text = stop_caption + " was removed"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
-        removeStop(chat_id, stop_id)
+        removeStop(chat_id, stop_name)
 
     if user_state == "settings_reorder":
         text = "Reorder stops"
@@ -220,10 +165,11 @@ def button(bot, update):
         showReorderStopsList(chat_id)
 
     if user_state == "reorder_stop":
-        stop_id = content["stopID"]
-        text = getStopName(stop_id) + " shifted to the top"
+        stop_name = content["stop_name"]
+        stop_caption = bus_stops.getStopCaption(stop_name)
+        text = stop_caption + " shifted to the top"
         bot.editMessageText(chat_id=chat_id, text=text, message_id=message_id)
-        reorderStop(chat_id, stop_id)
+        reorderStop(chat_id, stop_name)
 
     if user_state == "edit_done":
         text = "Done"
@@ -237,8 +183,9 @@ def button(bot, update):
         #initialise user's custom keyboard
         keyboard = []
         custom_stops = getUserStopsList(chat_id)
-        for stop in custom_stops:
-            keyboard.append([getStopName(stop)])
+        for stop_name in custom_stops:
+            stop_caption = bus_stops.getStopCaption(stop_name)
+            keyboard.append([stop_caption])
 
         sendLocationButton = KeyboardButton(text="Get nearest stops", request_location=True)
         keyboard.append(["/listallstops", sendLocationButton])
@@ -294,8 +241,9 @@ def showSettings(chat_id):
 def getCustomKeyboardText(chat_id):
     custom_stops = getUserStopsList(chat_id)
     text = ""
-    for index, stop in enumerate(custom_stops):
-        stop_text = "*" + str(index + 1) + ". " + getStopName(stop) + "*\n"
+    for index, stop_name in enumerate(custom_stops):
+        stop_caption = bus_stops.getStopCaption(stop_name)
+        stop_text = "*" + str(index + 1) + ". " + stop_caption + "*\n"
         text += stop_text
 
     return text
@@ -315,7 +263,9 @@ def getUserStopsList(chat_id):
     return custom_stops
 
 
-#current user state must be "settings_add"
+# TODO move this to UserState class
+# uses global variable bus_stops
+# current user state must be "settings_add"
 def showAddStops(chat_id):
     #get user's current custom list of stops
     custom_stops = getUserStopsList(chat_id)
@@ -323,16 +273,18 @@ def showAddStops(chat_id):
     #craft inline keyboard
     keyboard = []
 
-    if len(custom_stops) != len(stopsList):
-        for stop in stopsList:
-            if stop["name"] not in custom_stops:
-                buttonText = stop["caption"]
+    # TODO resolve temp conflicting var name
+    ls = bus_stops.getBusStopList()
+    if len(custom_stops) != len(ls):
+        for bus_stop in ls:
+            if bus_stop.getName() not in custom_stops:
+                button_text = bus_stop.getCaption()
                 data = {
                     "user_state": "add_new_stop",
-                    "stopID": stop["name"]
+                    "stop_name": bus_stop.getName()
                 }
                 payload = json.dumps(data)
-                keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=payload)])
 
         #add a done button
         #brings the user back to settings
@@ -354,9 +306,9 @@ def showAddStops(chat_id):
 
 #current user state must be "settings_add_new_stop"
 #brings user back to showAddStops
-def addStop(chat_id, stop_id):
+def addStop(chat_id, stop_name):
     custom_stops = getUserStopsList(chat_id)
-    custom_stops.append(stop_id)
+    custom_stops.append(stop_name)
 
     payload = {
         "custom_stops": custom_stops
@@ -378,14 +330,14 @@ def showRemoveStops(chat_id):
     keyboard = []
 
     if custom_stops:
-        for stop in custom_stops:
-            buttonText = getStopName(stop)
+        for stop_name in custom_stops:
+            button_text = bus_stops.getStopCaption(stop_name)
             data = {
                 "user_state": "remove_stop",
-                "stopID": stop
+                "stop_name": stop_name
             }
             payload = json.dumps(data)
-            keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=payload)])
 
         #add a done button
         #brings the user back to settings
@@ -405,9 +357,9 @@ def showRemoveStops(chat_id):
         showSettings(chat_id)
 
 
-def removeStop(chat_id, stop_id):
+def removeStop(chat_id, stop_name):
     custom_stops = getUserStopsList(chat_id)
-    custom_stops.remove(stop_id)
+    custom_stops.remove(stop_name)
 
     payload = {
         "custom_stops": custom_stops
@@ -427,14 +379,14 @@ def showReorderStopsList(chat_id):
     #craft the keyboard
     keyboard = []
 
-    for stop in custom_stops:
-        buttonText = getStopName(stop)
+    for stop_name in custom_stops:
+        button_text = bus_stops.getStopCaption(stop_name)
         data = {
             "user_state": "reorder_stop",
-            "stopID": stop
+            "stop_name": stop_name
         }
         payload = json.dumps(data)
-        keyboard.append([InlineKeyboardButton(buttonText, callback_data=payload)])
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=payload)])
 
     #add a done button
     #brings the user back to settings
@@ -450,11 +402,11 @@ def showReorderStopsList(chat_id):
     bot.sendMessage(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="Markdown")
 
 
-def reorderStop(chat_id, stop_id):
+def reorderStop(chat_id, stop_name):
     custom_stops = getUserStopsList(chat_id)
 
     #shift stop to the front
-    custom_stops.insert(0, custom_stops.pop(custom_stops.index(stop_id)))
+    custom_stops.insert(0, custom_stops.pop(custom_stops.index(stop_name)))
 
     payload = {
         "custom_stops": custom_stops
@@ -468,13 +420,13 @@ def reorderStop(chat_id, stop_id):
     showReorderStopsList(chat_id)
 
 
+# TODO try catch
 def processmessage(bot, update):
     chat_id = update.message.chat_id
     message_text = update.message.text
-    stop_id = getStopID(message_text)
+    stop_name = bus_stops.getStopName(message_text)
 
-    stop_result = BusStopResult(stop_id)
-    text = stop_result.getData()
+    text = bus_stops.getBusStopData(stop_name)
 
     bot.sendMessage(chat_id=chat_id, text=text)
 
@@ -493,11 +445,9 @@ def error(bot, update, error):
 
 def main():
     # load list of stops
-    global stopsList #use global variable so it only needs to be initialised once
-    stopsList = getStopsList()
-    stopsList = stopsList["busstops"]
-    global stopsDict
-    stopsDict = getStopsDict()
+    global bus_stops
+    bus_stops = BusStopList()
+    bus_stops.update()
 
     # initialise database
     client = MongoClient(DATABASE_URL)

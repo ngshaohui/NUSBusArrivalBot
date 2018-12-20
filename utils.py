@@ -3,12 +3,14 @@ from geopy.distance import vincenty
 # TODO refactor this (why is it removing the furthest stop?)
 # returns array of nearest stops objects
 # default of 5 nearest stops
-def getNNearestStops(query_point, bus_stop_list, n=5):
+def getNNearestStops(query_point, bus_stops, n=5):
     nearest_stops = [] # insert closest at the front, furthest at the back
     nearest_distances = []
 
+    bus_stop_list = bus_stops.getBusStopList()
+
     for bus_stop in bus_stop_list:
-        stop_location = (bus_stop.latitude, bus_stop.longitude)
+        stop_location = bus_stop.getLocation()
         current_distance = vincenty(query_point, stop_location).meters
 
         if len(nearest_stops) == 0: #initialise reference values
@@ -23,9 +25,7 @@ def getNNearestStops(query_point, bus_stop_list, n=5):
                     break
                 index = index + 1
 
-            if len(nearest_stops) == n:
-                # remove the furthest
-                del nearest_stops[5]
-                del nearest_distances[5]
+        if len(nearest_stops) == n:
+            break
 
     return nearest_stops

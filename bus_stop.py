@@ -3,21 +3,36 @@ import datetime
 import json
 import requests
 
-from shuttle_service import ShuttleServiceResult
+from shuttle_service import ShuttleService
 
 # Constants
 BUS_STOP_URL = 'http://nextbus.comfortdelgro.com.sg/testMethod.asmx/GetShuttleService?busstopname='
 TIMEOUT = 30
 
-class BusStopResult:
-  def __init__(self, stop_id):
+class BusStop:
+  def __init__(self, name, caption, latitude, longitude):
 
-    self.time_created = datetime.date.min # datetime
-    self.expiry_time = datetime.date.min # datetime
-    self.name = "error" # str
-    self.caption = "error" # str
-    self.shuttle_services = [] # [ShuttleServiceResult]
+    self.time_created = datetime.datetime.min # datetime
+    self.expiry_time = datetime.datetime.min # datetime
+    self.name = name # str
+    self.caption = caption # str
+    self.latitude = latitude # float
+    self.longitude = longitude # float
+    self.shuttle_services = [] # [ShuttleService]
     self.valid = False # bool
+
+
+  def getName(self):
+    return self.name
+
+
+  def getCaption(self):
+    return self.caption
+
+
+  # return (float, float)
+  def getLocation(self):
+    return (self.latitude, self.longitude)
 
 
   def update(self):
@@ -36,7 +51,7 @@ class BusStopResult:
       shuttles = data["ShuttleServiceResult"]["shuttles"]
 
       for shuttle in shuttles:
-        service = ShuttleServiceResult(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
+        service = ShuttleService(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
         self.shuttle_services.append(service)
 
       # sort list by name
@@ -59,11 +74,11 @@ class BusStopResult:
       text = text + "Bus arrival timings for " + self.caption + "\n\n" #text to be displayed to user
 
       for service in self.shuttle_services:
-        bus_id = service.name
+        bus_name = service.name
         arrival_time = service.arrival_time
         next_arrival_time = service.next_arrival_time
 
-        text = text + bus_id + "\n" #append bus id
+        text = text + bus_name + "\n" #append bus id
         text = text + "Next: " + arrival_time + "\n" #append next arrival time
         if arrival_time != "-": #show subsequent only if there is a there is a bus arriving next
           text = text + "Subsequent: " + next_arrival_time + "\n" #append subsequent arrival time
