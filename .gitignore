@@ -2,6 +2,7 @@
 credentials.py
 
 # Development folder
+__pycache__
 /dev
 
 # IDEs and editors
@@ -14,6 +15,7 @@ credentials.py
 *.sublime-workspace
 
 # IDE - VSCode
+.vscode/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
