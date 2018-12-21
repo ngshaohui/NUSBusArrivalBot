@@ -10,11 +10,13 @@ from utils import BUS_STOP_LIST_URL, BUS_STOP_URL
 # https://stackoverflow.com/a/21995949/3826254
 
 # TODO try catch
+
+
 def generateBusStopList():
     url = BUS_STOP_LIST_URL
     response = requests.get(url)
 
-    if response.status_code == requests.codes.ok: # 200 OK
+    if response.status_code == requests.codes.ok:  # 200 OK
         soup = BeautifulSoup(response.content, 'html.parser')
         json_data = json.loads(soup.text)
         str_data = json.dumps(json_data)

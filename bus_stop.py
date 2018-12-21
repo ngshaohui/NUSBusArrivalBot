@@ -9,94 +9,95 @@ from utils import BUS_STOP_URL
 # Constants
 TIMEOUT = 30
 
+
 class BusStop:
-  def __init__(self, name, caption, latitude, longitude):
+    def __init__(self, name, caption, latitude, longitude):
 
-    self.time_created = datetime.datetime.min # datetime
-    self.expiry_time = datetime.datetime.min # datetime
-    self.name = name # str
-    self.caption = caption # str
-    self.latitude = latitude # float
-    self.longitude = longitude # float
-    self.shuttle_services = [] # [ShuttleService]
-    self.valid = False # bool
+        self.time_created = datetime.datetime.min  # datetime
+        self.expiry_time = datetime.datetime.min  # datetime
+        self.name = name  # str
+        self.caption = caption  # str
+        self.latitude = latitude  # float
+        self.longitude = longitude  # float
+        self.shuttle_services = []  # [ShuttleService]
+        self.valid = False  # bool
 
+    def getName(self):
+        return self.name
 
-  def getName(self):
-    return self.name
+    def getCaption(self):
+        return self.caption
 
+    # return (float, float)
+    def getLocation(self):
+        return (self.latitude, self.longitude)
 
-  def getCaption(self):
-    return self.caption
+    def update(self):
+        self.clearShuttleServiceList()
 
+        url = BUS_STOP_URL + self.name
+        response = requests.get(url)
+        self.time_created = datetime.datetime.now()  # datetime
+        self.expiry_time = self.time_created + \
+            datetime.timedelta(seconds=TIMEOUT)  # datetime
 
-  # return (float, float)
-  def getLocation(self):
-    return (self.latitude, self.longitude)
+        if response.status_code == requests.codes.ok:  # 200 OK
+            self.valid = True
+            soup = BeautifulSoup(response.content, 'html.parser')
+            data = json.loads(soup.text)
 
+            shuttles = data["ShuttleServiceResult"]["shuttles"]
 
-  def update(self):
-    self.clearShuttleServiceList()
+            for shuttle in shuttles:
+                service = ShuttleService(
+                    shuttle["name"],
+                    shuttle["arrivalTime"],
+                    shuttle["nextArrivalTime"])
+                self.shuttle_services.append(service)
 
-    url = BUS_STOP_URL + self.name
-    response = requests.get(url)
-    self.time_created = datetime.datetime.now() # datetime
-    self.expiry_time = self.time_created + datetime.timedelta(seconds=TIMEOUT) # datetime
+            # sort list by name
+            self.shuttle_services.sort(key=lambda x: x.name)
+        else:
+            self.valid = False
 
-    if response.status_code == requests.codes.ok: # 200 OK
-      self.valid = True
-      soup = BeautifulSoup(response.content, 'html.parser')
-      data = json.loads(soup.text)
+    def clearShuttleServiceList(self):
+        del self.shuttle_services[:]
 
-      shuttles = data["ShuttleServiceResult"]["shuttles"]
+    def hasExpired(self):
+        return datetime.datetime.now() > self.expiry_time
 
-      for shuttle in shuttles:
-        service = ShuttleService(shuttle["name"], shuttle["arrivalTime"], shuttle["nextArrivalTime"])
-        self.shuttle_services.append(service)
+    def dataAsString(self):
+        text = ""
+        if self.valid:
+            text = text + "Bus arrival timings for " + \
+                self.caption + "\n\n"  # text to be displayed to user
 
-      # sort list by name
-      self.shuttle_services.sort(key=lambda x: x.name)
-    else:
-      self.valid = False
+            for service in self.shuttle_services:
+                bus_name = service.name
+                arrival_time = service.arrival_time
+                next_arrival_time = service.next_arrival_time
 
+                text = text + bus_name + "\n"
+                text = text + "Next: " + arrival_time + "\n"
+                # show subsequent only if there is a there is a bus arriving
+                if arrival_time != "-":
+                    text = text + "Subsequent: " + next_arrival_time + \
+                        "\n"  # append subsequent arrival time
+                    text = text + "\n"
 
-  def clearShuttleServiceList(self):
-    del self.shuttle_services[:]
+            # remove the additional \n characters from the back of the string
+            text = text.rstrip()
 
+        else:
+            text = text + "Sorry, the bus timing service is unavailable.\n"
 
-  def hasExpired(self):
-    return datetime.datetime.now() > self.expiry_time
+        return text
 
+    # TODO better method name
+    def getData(self):
+        if self.hasExpired():
+            self.update()
 
-  def dataAsString(self):
-    text = ""
-    if self.valid:
-      text = text + "Bus arrival timings for " + self.caption + "\n\n" #text to be displayed to user
+        text = self.dataAsString()
 
-      for service in self.shuttle_services:
-        bus_name = service.name
-        arrival_time = service.arrival_time
-        next_arrival_time = service.next_arrival_time
-
-        text = text + bus_name + "\n" #append bus id
-        text = text + "Next: " + arrival_time + "\n" #append next arrival time
-        if arrival_time != "-": #show subsequent only if there is a there is a bus arriving next
-          text = text + "Subsequent: " + next_arrival_time + "\n" #append subsequent arrival time
-        text = text + "\n"
-
-      text = text.rstrip() #rstrip removes the additional \n characters from the back of the string
-
-    else:
-      text = text + "Sorry, the bus timing service seems to be unavailable." + "\n"
-
-    return text
-
-
-  # TODO better method name
-  def getData(self):
-    if self.hasExpired():
-      self.update()
-
-    text = self.dataAsString()
-
-    return text
+        return text
