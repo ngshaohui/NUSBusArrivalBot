@@ -66,7 +66,7 @@ def start(bot, update):
 
     text = ""
     text += "Hello! This is a telegram bot for getting the arrival timings"
-    text += " of NUS busses."
+    text += " of NUS buses."
     bot.sendMessage(chat_id=chat_id,
                     text=text,
                     reply_markup=reply_markup)
